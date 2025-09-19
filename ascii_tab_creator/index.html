@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>ベースTABクリエイター</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Menlo', 'Consolas', monospace;
+    }
+    .container {
+      margin-top: 20px;
+    }
+    #tabInput {
+      height: 400px;
+      white-space: pre;
+      font-size: 14px;
+    }
+    #outputArea {
+        height: 400px;
+        white-space: pre;
+        font-size: 14px;
+        background-color: #272822;
+        color: #f8f8f2;
+        padding: 1rem;
+        border-radius: 0.25rem;
+    }
+    .btn-symbol {
+        margin: 2px;
+    }
+    .theme-switch {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+    }
+    #fretboardContainer {
+        border: 1px solid #444;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 1.5rem;
+    }
+    .string-row {
+        display: flex;
+        align-items: center;
+        padding: 5px 0;
+        border-bottom: 1px solid #333;
+    }
+    .string-row:last-child {
+        border-bottom: none;
+    }
+    .string-label {
+        font-weight: bold;
+        width: 30px;
+        text-align: center;
+    }
+    .backspace-btn {
+        width: 40px;
+        font-size: 1.2rem;
+        line-height: 1;
+        margin-right: 10px;
+    }
+    .frets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        flex: 1;
+    }
+    .fret-btn {
+        width: 35px;
+        padding: 0.25rem 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="d-flex justify-content-between align-items-center mb-4">
+      <h1><i class="bi bi-music-note-list"></i> ベースTABクリエイター</h1>
+      <div class="theme-switch form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="themeSwitch">
+        <label class="form-check-label" for="themeSwitch"><i class="bi bi-brightness-high-fill"></i></label>
+      </div>
+    </header>
+
+    <div id="fretboardContainer"></div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="h4">入力</h2>
+            <div class="btn-group mb-2">
+                <button class="btn btn-sm btn-secondary" onclick="switchLang('ja')">日本語</button>
+                <button class="btn btn-sm btn-secondary" onclick="switchLang('en')">English</button>
+            </div>
+        </div>
+        
+        <div id="symbolToolbar" class="mb-2">
+          <strong id="symbolTitle">🎵 演奏記号:</strong>
+        </div>
+
+        <textarea id="tabInput" class="form-control" spellcheck="false">
+G|--------------------------------|
+D|--------------------------------|
+A|--------------------------------|
+E|--------------------------------|
+        </textarea>
+      </div>
+      <div class="col-md-6">
+        <h2 class="h4">出力</h2>
+        <div id="outputArea" class="bg-dark text-light p-3"></div>
+      </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="d-flex flex-wrap gap-2">
+                <button onclick="addMeasure()" id="addMeasureBtn" class="btn btn-primary"><i class="bi bi-plus-lg"></i> 小節追加</button>
+                <button onclick="validateFormat()" id="validateBtn" class="btn btn-info"><i class="bi bi-check-lg"></i> フォーマットチェック</button>
+                <button id="copyBtn" class="btn btn-success"><i class="bi bi-clipboard"></i> クリップボードにコピー</button>
+                <button id="downloadBtn" class="btn btn-warning"><i class="bi bi-download"></i> TXTで保存</button>
+            </div>
+            <div class="mt-2" id="errorMsg"></div>
+        </div>
+    </div>
+
+    <div class="footer" id="footerArea">
+      <span id="footerText">5弦ベース用TAB変換はこちら！</span>
+      <a href="https://oky.gumroad.com/l/4st-tab-to-5st" target="_blank" rel="noopener" id="footerLink">5弦TAB変換ツールへ</a>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const texts = {
+      ja: {
+        symbolTitle: "🎵 演奏記号:",
+        symbols: [
+          {label: "h（ハンマリング）", symbol: "h"},
+          {label: "p（プリング）", symbol: "p"},
+          {label: "b（チョーキング）", symbol: "b"},
+          {label: "^（スライドUP）", symbol: "^"},
+          {label: "v（スライドDOWN）", symbol: "v"},
+          {label: "~（ビブラート）", symbol: "~"},
+          {label: "x（ミュート）", symbol: "x"},
+          {label: "|（小節線）", symbol: "|"}
+        ],
+        addMeasureBtn: "＋ 小節追加",
+        validateBtn: "✅ フォーマットチェック",
+        copyBtnText: "クリップボードにコピー",
+        downloadBtnText: "TXTで保存",
+        errorLines: "4行セット(G,D,A,E)でTABを入力してください。",
+        errorPrefix: "TABフォーマットが正しくありません（行 ",
+        errorLength: "4行の長さが揃っていません（行 ",
+        errorChar: "不正な文字が含まれています（行 ",
+        errorNumRange: "数字は0～24の範囲で入力してください（行 ",
+        successMsg: "✅ フォーマットは正しいです。",
+        footerText: "5弦ベース用TAB変換はこちら！",
+        footerLink: "5弦TAB変換ツールへ"
+      },
+      en: {
+        symbolTitle: "🎵 Playing Symbols:",
+        symbols: [
+          {label: "h (Hammer-on)", symbol: "h"},
+          {label: "p (Pull-off)", symbol: "p"},
+          {label: "b (Bend)", symbol: "b"},
+          {label: "^ (Slide UP)", symbol: "^"},
+          {label: "v (Slide DOWN)", symbol: "v"},
+          {label: "~ (Vibrato)", symbol: "~"},
+          {label: "x (Mute)", symbol: "x"},
+          {label: "| (Bar line)", symbol: "|"}
+        ],
+        addMeasureBtn: "+ Add Measure",
+        validateBtn: "✅ Validate Format",
+        copyBtnText: "Copy to Clipboard",
+        downloadBtnText: "Save as TXT",
+        errorLines: "Please enter TAB in sets of 4 lines (G, D, A, E).",
+        errorPrefix: "Incorrect TAB format at line ",
+        errorLength: "Line lengths in the 4-line set are inconsistent at line ",
+        errorChar: "Invalid character detected at line ",
+        errorNumRange: "Numbers must be between 0 and 24 at line ",
+        successMsg: "✅ TAB format is correct.",
+        footerText: "5-string bass TAB converter here!",
+        footerLink: "Go to 5-string TAB converter"
+      }
+    };
+
+    let currentLang = 'ja';
+
+    function createFretboard() {
+        const fretboardContainer = document.getElementById('fretboardContainer');
+        fretboardContainer.innerHTML = '';
+        const strings = ['G', 'D', 'A', 'E'];
+
+        strings.forEach(stringName => {
+            const row = document.createElement('div');
+            row.className = 'string-row';
+            
+            const label = document.createElement('div');
+            label.className = 'string-label';
+            label.textContent = stringName;
+            row.appendChild(label);
+
+            const backspaceBtn = document.createElement('button');
+            backspaceBtn.className = 'btn btn-outline-danger backspace-btn';
+            backspaceBtn.innerHTML = '⌫';
+            backspaceBtn.onclick = () => backspaceOnString(stringName);
+            row.appendChild(backspaceBtn);
+            
+            const fretsDiv = document.createElement('div');
+            fretsDiv.className = 'frets';
+
+            for (let i = 0; i <= 24; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-outline-primary btn-sm fret-btn';
+                btn.textContent = i;
+                btn.onclick = () => insertFret(stringName, i);
+                fretsDiv.appendChild(btn);
+            }
+            row.appendChild(fretsDiv);
+            fretboardContainer.appendChild(row);
+        });
+    }
+
+    function getCursorInfo(textarea) {
+        const text = textarea.value;
+        const cursorPos = textarea.selectionStart;
+        const lines = text.split('\n');
+        let totalLen = 0;
+        for (let i = 0; i < lines.length; i++) {
+            const lineLen = lines[i].length + 1; // +1 for newline character
+            if (totalLen + lineLen > cursorPos) {
+                return {
+                    lineIndex: i,
+                    posInLine: cursorPos - totalLen,
+                    lines: lines
+                };
+            }
+            totalLen += lineLen;
+        }
+        return {
+            lineIndex: lines.length - 1,
+            posInLine: lines[lines.length - 1].length,
+            lines: lines
+        };
+    }
+
+    function getTargetLineIndex(cursorLineIndex, stringName, lines) {
+        const stringMap = { 'G': 0, 'D': 1, 'A': 2, 'E': 3 };
+        const offset = stringMap[stringName];
+        if (offset === undefined) return -1;
+
+        let blockStart = cursorLineIndex;
+        while (blockStart >= 0) {
+            if (/^G\|/.test(lines[blockStart])) {
+                break;
+            }
+            blockStart--;
+        }
+        if (blockStart < 0) return cursorLineIndex; // Fallback
+        
+        return blockStart + offset;
+    }
+
+    // ▼▼▼ ここから関数を修正 ▼▼▼
+    function insertFret(stringName, fretNumber) {
+        const textarea = document.getElementById('tabInput');
+        const { lineIndex, posInLine, lines } = getCursorInfo(textarea);
+        
+        const targetLineIndex = getTargetLineIndex(lineIndex, stringName, lines);
+        if (targetLineIndex === -1 || targetLineIndex >= lines.length) return;
+
+        let targetLine = lines[targetLineIndex];
+        const fretStr = fretNumber.toString();
+        const insertion = fretStr + '-'; // 数字の後にハイフンを自動で追加
+
+        if (posInLine < 2) return; // "G|"などの上書きを防止
+        if (posInLine + insertion.length > targetLine.length) return; // 行の末尾を超える入力を防止
+
+        const before = targetLine.substring(0, posInLine);
+        const after = targetLine.substring(posInLine + insertion.length);
+        lines[targetLineIndex] = before + insertion + after;
+        
+        const newText = lines.join('\n');
+        
+        // 新しいカーソル位置を正確に計算
+        let newCursorPos = 0;
+        for (let i = 0; i < targetLineIndex; i++) {
+            newCursorPos += lines[i].length + 1; // 行の長さ + 改行文字
+        }
+        newCursorPos += posInLine + insertion.length; // ターゲット行のカーソル位置
+
+        textarea.value = newText;
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+    }
+
+    function backspaceOnString(stringName) {
+        const textarea = document.getElementById('tabInput');
+        const { lineIndex, posInLine, lines } = getCursorInfo(textarea);
+
+        const targetLineIndex = getTargetLineIndex(lineIndex, stringName, lines);
+        if (targetLineIndex === -1 || targetLineIndex >= lines.length) return;
+        
+        if (posInLine <= 2) return; // "G|"などの削除を防止
+
+        let targetLine = lines[targetLineIndex];
+        const before = targetLine.substring(0, posInLine - 1);
+        const after = targetLine.substring(posInLine);
+        lines[targetLineIndex] = before + '-' + after; // 1文字削除してハイフンに置き換え
+
+        const newText = lines.join('\n');
+
+        // 新しいカーソル位置を正確に計算
+        let newCursorPos = 0;
+        for (let i = 0; i < targetLineIndex; i++) {
+            newCursorPos += lines[i].length + 1; // 行の長さ + 改行文字
+        }
+        newCursorPos += posInLine - 1; // ターゲット行のカーソル位置（1文字戻る）
+
+        textarea.value = newText;
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+    }
+    // ▲▲▲ 関数修正ここまで ▲▲▲
+
+    function updateUIText() {
+      const t = texts[currentLang];
+      document.getElementById('symbolTitle').textContent = t.symbolTitle;
+
+      const toolbar = document.getElementById('symbolToolbar');
+      while (toolbar.children.length > 1) {
+        toolbar.removeChild(toolbar.lastChild);
+      }
+
+      t.symbols.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-outline-secondary btn-symbol';
+        btn.textContent = s.label;
+        btn.onclick = () => insertSymbol(s.symbol);
+        toolbar.appendChild(btn);
+      });
+
+      document.getElementById('addMeasureBtn').innerHTML = `<i class="bi bi-plus-lg"></i> ${t.addMeasureBtn}`;
+      document.getElementById('validateBtn').innerHTML = `<i class="bi bi-check-lg"></i> ${t.validateBtn}`;
+      document.getElementById('copyBtn').innerHTML = `<i class="bi bi-clipboard"></i> ${t.copyBtnText}`;
+      document.getElementById('downloadBtn').innerHTML = `<i class="bi bi-download"></i> ${t.downloadBtnText}`;
+
+      document.getElementById('footerText').textContent = t.footerText;
+      const footerLink = document.getElementById('footerLink');
+      footerLink.textContent = t.footerLink;
+      footerLink.href = "https://oky.gumroad.com/l/4st-tab-to-5st";
+    }
+
+    function switchLang(lang) {
+      if (texts[lang]) {
+        currentLang = lang;
+        updateUIText();
+        clearMessages();
+      }
+    }
+
+    function insertSymbol(symbol) {
+      const textarea = document.getElementById('tabInput');
+      const start = textarea.selectionStart;
+      
+      const before = textarea.value.substring(0, start);
+      const afterReplaced = textarea.value.substring(start + 1);
+      
+      textarea.value = before + symbol + afterReplaced;
+      textarea.selectionStart = textarea.selectionEnd = start + symbol.length;
+      textarea.focus();
+    }
+
+    function addMeasure() {
+      const textarea = document.getElementById('tabInput');
+      let lines = textarea.value.split('\n');
+
+      const filteredLines = lines.filter(line => line.trim() !== '');
+
+      if (filteredLines.length % 4 !== 0) {
+        alert(texts[currentLang].errorLines);
+        return;
+      }
+
+      const lastFour = filteredLines.slice(-4);
+      const currentBarCount = (lastFour[0].match(/\|/g) || []).length - 1;
+
+      if ((currentBarCount + 1) % 4 === 0 && currentBarCount !== 0) {
+        lines.push('');
+        lines.push('G|--------------------------------|');
+        lines.push('D|--------------------------------|');
+        lines.push('A|--------------------------------|');
+        lines.push('E|--------------------------------|');
+      } else {
+        let found = false;
+        let lastBlockIndex = -1;
+        for (let i = lines.length - 1; i >= 0; i--) {
+            if(lines[i].match(/^G\|/)) {
+                lastBlockIndex = i;
+                break;
+            }
+        }
+
+        if(lastBlockIndex !== -1) {
+            for(let i = 0; i < 4; i++) {
+                lines[lastBlockIndex + i] += '----------------|';
+            }
+        }
+      }
+
+      const newLines = [];
+      let blankCount = 0;
+      for(const line of lines) {
+          if (line.trim() === '') {
+              blankCount++;
+              if (blankCount < 2) newLines.push(line);
+          } else {
+              blankCount = 0;
+              newLines.push(line);
+          }
+      }
+      
+      textarea.value = newLines.join('\n');
+    }
+
+    function validateFormat() {
+      clearMessages();
+      const input = document.getElementById('tabInput').value;
+      const outputArea = document.getElementById('outputArea');
+
+      if (!input.trim()) {
+        return;
+      }
+
+      const lines = input.split('\n').filter(line => line.trim() !== '');
+
+      if (lines.length % 4 !== 0) {
+        setError(texts[currentLang].errorLines);
+        return;
+      }
+
+      const validSymbols = new Set(['h', 'p', 'b', '^', 'v', '~', 'x', '|', '-']);
+      const maxFret = 24;
+
+      for (let i = 0; i < lines.length; i += 4) {
+        if(i+3 >= lines.length) break;
+        const stringLines = {
+          G: lines[i],
+          D: lines[i + 1],
+          A: lines[i + 2],
+          E: lines[i + 3],
+        };
+
+        if (!stringLines.G.startsWith('G|')) { setError(texts[currentLang].errorPrefix + (i + 1)); return; }
+        if (!stringLines.D.startsWith('D|')) { setError(texts[currentLang].errorPrefix + (i + 2)); return; }
+        if (!stringLines.A.startsWith('A|')) { setError(texts[currentLang].errorPrefix + (i + 3)); return; }
+        if (!stringLines.E.startsWith('E|')) { setError(texts[currentLang].errorPrefix + (i + 4)); return; }
+
+        const len = stringLines.G.length;
+        if (stringLines.D.length !== len || stringLines.A.length !== len || stringLines.E.length !== len ) {
+          setError(texts[currentLang].errorLength + (i + 1));
+          return;
+        }
+
+        for (let lineIndex = i; lineIndex < i + 4; lineIndex++) {
+          const line = lines[lineIndex].slice(2);
+          let pos = 0;
+          while (pos < line.length) {
+            const ch = line[pos];
+            if (ch >= '0' && ch <= '9') {
+              let numStr = ch;
+              if (pos + 1 < line.length && line[pos + 1] >= '0' && line[pos + 1] <= '9') {
+                numStr += line[pos + 1];
+                pos++;
+              }
+              const numVal = Number(numStr);
+              if (numVal < 0 || numVal > maxFret) { setError(texts[currentLang].errorNumRange + (lineIndex + 1)); return; }
+            } else if (!validSymbols.has(ch)) {
+              setError(texts[currentLang].errorChar + (lineIndex + 1));
+              return;
+            }
+            pos++;
+          }
+        }
+      }
+
+      setSuccess(texts[currentLang].successMsg);
+      outputArea.textContent = input;
+    }
+
+    function setError(msg) {
+      const errorMsgElem = document.getElementById('errorMsg');
+      errorMsgElem.style.color = 'red';
+      errorMsgElem.textContent = msg;
+      document.getElementById('outputArea').textContent = '';
+    }
+
+    function setSuccess(msg) {
+      const errorMsgElem = document.getElementById('errorMsg');
+      errorMsgElem.style.color = 'green';
+      errorMsgElem.textContent = msg;
+    }
+
+    function clearMessages() {
+      const errorMsgElem = document.getElementById('errorMsg');
+      errorMsgElem.textContent = '';
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        createFretboard();
+        updateUIText();
+
+        document.getElementById('copyBtn').addEventListener('click', () => {
+          const outputArea = document.getElementById('outputArea');
+          if(!outputArea.textContent) {
+              alert('出力エリアにコピーする内容がありません。先にフォーマットチェックを実行してください。');
+              return;
+          }
+          navigator.clipboard.writeText(outputArea.textContent)
+            .then(() => alert('クリップボードにコピーしました！'))
+            .catch(err => alert('コピーに失敗しました: ' + err));
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+          const outputArea = document.getElementById('outputArea');
+          if(!outputArea.textContent) {
+              alert('出力エリアに保存する内容がありません。先にフォーマットチェックを実行してください。');
+              return;
+          }
+          const blob = new Blob([outputArea.textContent], { type: 'text/plain' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'bass-tab.txt';
+          link.click();
+          URL.revokeObjectURL(link.href);
+        });
+
+        const themeSwitch = document.getElementById('themeSwitch');
+        const themeIcon = document.querySelector('.form-check-label i');
+        themeSwitch.addEventListener('change', () => {
+            if (themeSwitch.checked) {
+                document.documentElement.setAttribute('data-bs-theme', 'light');
+                themeIcon.classList.remove('bi-brightness-high-fill');
+                themeIcon.classList.add('bi-moon-stars-fill');
+            } else {
+                document.documentElement.setAttribute('data-bs-theme', 'dark');
+                themeIcon.classList.remove('bi-moon-stars-fill');
+                themeIcon.classList.add('bi-brightness-high-fill');
+            }
+        });
+    });
+  </script>
+</body>
+</html>
